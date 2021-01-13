@@ -2,9 +2,14 @@
   "name": "bugless",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "bin": "./bin/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "parcel watch src/index.js --target node -d bin -o index.js",
+    "build": "parcel build src/index.js --target node -d bin -o index.js",
+    "prod": "npm run lint && npm run format && npm run test && npm run build",
+    "lint": "eslint ./src",
+    "test": "echo todo: \"testing\"",
+    "format": "prettier ./src --write"
   },
   "repository": {
     "type": "git",
@@ -15,5 +20,15 @@
   "bugs": {
     "url": "https://github.com/scicave/debugger/issues"
   },
-  "homepage": "https://github.com/scicave/debugger#readme"
+  "homepage": "https://github.com/scicave/debugger#readme",
+  "dependencies": {
+    "cli-highlight": "^2.1.10",
+    "commander": "^6.2.1"
+  },
+  "devDependencies": {
+    "eslint": "^7.17.0",
+    "parcel": "^1.12.4",
+    "parcel-plugin-package-version": "^1.0.2",
+    "prettier": "^2.2.1"
+  }
 }
