@@ -1,22 +1,34 @@
-import transform from "./transform";
-import { spawn } from "child_process";
-import { Command } from "commander";
+import getOptions from './options';
+import Controller from './controller';
+import { spawn } from 'child_process';
 
-const options = {
-  port: 1234,
-};
-
-const program = new Command();
-program.version(process.env.PACKAGE_VERSION); // eslint-ignore no-undef
-
+let options = getOptions();
+if (!options) process.exit(2); // errors are streamed inside getOptions
 
 function getArgs() {
-  return [`--port=${options.port}`, "./asd.js"]
+  return [`--port=${options.port}`, options.file];
 }
 
-const inspect = spawn("node", ["inspect", ...getArgs()]);
+const inspect = spawn('node', ['inspect', ...getArgs()]);
+const ctrl = new Controller();
+const screen = ctrl.screen;
 
-process.stdin.pipe(inspect.stdin);
-inspect.stdout.pipe(transform).pipe(process.stdout);
-inspect.stderr.pipe(process.stderr);
+// we don't need buffers, we need utf8 string
+inspect.stdout.setEncoding('utf8');
+inspect.stderr.setEncoding('utf8');
+
+// get the stdout of the inspect spawn
+inspect.stdout.on("data", (data)=>{
+  ctrl.emit("data", data);
+});
+
+// if something is streamed from stderr
+inspect.stderr.on("data", (data)=>{
+  ctrl.emit("error", data, true /* is stderr */);
+});
+
+// render the screen.
+screen.title = "Debugging: " + options.file;
+// render the whole scene
+// screen.splashScreenThenRender();
 
