@@ -2,49 +2,83 @@ import blessed from 'blessed';
 import CodeBox from './CodeBox';
 import StatusBar from './StatusBar';
 import LogBox from './LogBox';
-import Grid from './Grid';
-import getSplashScreen from './SplashScreen';
-
-let showSplashScreen = false;
+import SplashScreen from './SplashScreen';
+import CloseCounter from './CloseCounter';
 
 // this class is contructed inside ../controller
-export default class Screen extends blessed.Widgets.Screen {
+// NOTE: experimentally, key events will be emmited 
+// for the focued element, then propagate to the other elements
+export default class Screen extends blessed.Screen {
 
-  constructor(ctrl) {
+  constructor(ctrl, options={}) {
 
-    super({
-      tabSize: 4,
-      // smartCSR: true // smart change-scroll-region
-      dockBorders: true,
-    });
+    super(options);
+
+    const { theme } = ctrl.options;
+
+    const statusBarOptions = {
+      top: '100%-1',
+      height: 1,
+      border: {
+        type: "line",
+      },
+      style: theme === 'default' ? undefined : theme.statusBar.style 
+    };
+
+    const codeBoxOptions = {
+      height: '100%-1',
+      border: {
+        type: "line",
+      },
+      style: theme === 'default' ? undefined : theme.codeBox.style,
+    };
+
+    const logBoxOptions = {
+      height: '80%',
+      width: '80%',
+      top: 'center',
+      left: 'center',
+      type: 'overlay',
+      hidden: true,
+      border: {
+        type: "line",
+      },
+      style: theme === 'default' ? undefined : theme.logBox.style,
+    };
+
+    const closeCounterOptions = {
+      width: 'shrink',
+      height: 'shrink',
+      type: 'overlay',
+      top: 'center',
+      left: 'center',
+      align: 'center',
+      valign: 'middle',
+      hidden: true,
+      shadow: true,
+      tags: true,
+      border: {
+        type: 'line',
+        fg: 'white',
+      },
+    };
 
     this.ctrl = ctrl; // instance of ../controller
-    this.showSplashScreen = true;
-    this.statusBar = new StatusBar(this);
-    this.codeBox = new CodeBox(this);
-    this.logBox = new LogBox(this);
-    this.grid = new Grid({ rows: 12, cols: 12, screen });
+    this.showSplashScreen = false;
 
-    this.closeCounter = {
-      max: 2, // for resetting value
-      value: 2,
-      visible: false,
-      elm: blessed.box({
-        align: 'center',
-        valign: 'middle',
-        hide: true,
-        border: {
-          type: 'line',
-          fg: 'blue',
-          bg: 'white'
-        },
-      })
-    }
+    this.statusBar = new StatusBar(this, statusBarOptions);
+    this.codeBox = new CodeBox(this, codeBoxOptions);
+    this.logBox = new LogBox(this, logBoxOptions);
+    this.logBoxVisible = false;
+    this.closeCounter = new CloseCounter(this, closeCounterOptions);
 
-    if (showSplashScreen)
-      getSplashScreen(screen);
+    // add main events and other events
+    this.addEvents();
+  
+    if (this.showSplashScreen)
+      this.splashScreen = new SplashScreen(screen);
     else
-      screen.splashScreenThenRender();
+      this.firstRender();
 
   }
 
@@ -53,46 +87,44 @@ export default class Screen extends blessed.Widgets.Screen {
   // ----------------------
 
   addEvents() {
-
-    this.key('C-c', function() {
+    // show the close-counter or exit 0
+    this.key('C-c', this._key_Cc = function() {
       // close after some number of trials
       this.closeCounter.value--;
-      if (!this.closeCounter.value)
+      if (!this.closeCounter.value) {
         this.ctrl.emit("exit", 0);
-      else
-        this.showCloseCounter();
+        process.exit(0);
+      } else {
+        let value = this.closeCounter.value;
+        console.log('\u0007'); // beepSound = '\u0007';
+        this.closeCounter.setContent(`Please press <C-c> again: {blink}{bold}{red-fg}${value}{/}`);
+        this.closeCounter.show();
+      }
     });
+    // hide the close counter, and reset it
+    this.key(['q', 'escape'], this._key_escape = function() {
+      if (this.closeCounter.visible) {
+        // reset it to the max val to start counting again when C-c pressed
+        this.closeCounter.value = this.closeCounter.max;
+        this.closeCounter.hide();
+      }
+    });
+    // toggle the log box
+    this.key("C-l", this._key_Cl = function(){
+      this.logBox.toggle();
+    });
+  }
 
-    this.key('escape', function() {
-      if (this.closeCounter.visible)
-        this.hideCloseCounter();
-    });
+  // ----------------------------------
+  //        some helper methods
+  // ----------------------------------
+
+  updateLogBox(data, isStdErr) {
 
   }
 
-  // ----------------------
-  //    close counter
-  // ----------------------
+  updateCodeBox(data) {
 
-  showCloseCounter() {
-    let { visible, value, elm } = this.closeCounter;
-    if (!visible) {
-      this.ctrl.emit("close-counter", true);
-      this.closeCounter.visible = true;
-      this.removeEvents();
-      elm.show();
-    }
-    elm.setContent(`Please press <C-c> again: {blink}{bold}{fg-red}${value}{/}`);
-    this.render();
-  }
-
-  hideCloseCounter() {
-    this.ctrl.emit("close-counter", false);
-    this.closeCounter.elm.hide();
-    this.closeCounter.visible = false;
-    this.closeCounter.value = this.closeCounter.max;
-    this.addEvents();
-    this.render();
   }
 
   // ----------------------------------
@@ -104,6 +136,7 @@ export default class Screen extends blessed.Widgets.Screen {
     this.append(this.codeBox);
     this.append(this.logBox);
     this.append(this.closeCounter); // it is hidden by default
+    this.codeBox.focus();
   }
 
   // ----------------------------------
